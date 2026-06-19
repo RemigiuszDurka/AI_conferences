@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="pl" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Juliusz Cezar — mapa podróży i kalendarium</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #090a0f;
+      --surface: rgba(18, 20, 29, .86);
+      --surface-2: rgba(255, 255, 255, .08);
+      --stroke: rgba(255, 230, 176, .18);
+      --text: #fff4dc;
+      --muted: #cbbd9b;
+      --gold: #e9b949;
+      --gold-2: #7a4b13;
+      --red: #c55a44;
+      --green: #69c98f;
+      --blue: #69a8ff;
+      --cyan: #5ad4d8;
+      --shadow: 0 18px 48px rgba(0,0,0,.36);
+      --radius: 22px;
+    }
+
+    [data-theme="light"] {
+      color-scheme: light;
+      --bg: #efe7d3;
+      --surface: rgba(255, 250, 235, .9);
+      --surface-2: rgba(80, 56, 19, .08);
+      --stroke: rgba(80, 56, 19, .2);
+      --text: #20170d;
+      --muted: #604f32;
+      --gold: #956414;
+      --gold-2: #d5a13f;
+      --shadow: 0 16px 38px rgba(95, 70, 30, .16);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      min-height: 100%;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 10% -10%, rgba(197,90,68,.35), transparent 31rem),
+        radial-gradient(circle at 90% 0%, rgba(233,185,73,.24), transparent 28rem),
+        linear-gradient(135deg, var(--bg), #131523 62%, #090a0f);
+      overflow: hidden;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      opacity: .12;
+      background-image:
+        linear-gradient(45deg, currentColor 1px, transparent 1px),
+        linear-gradient(-45deg, currentColor 1px, transparent 1px);
+      background-size: 42px 42px;
+      mix-blend-mode: overlay;
+    }
+
+    button, input, select { font: inherit; }
+    button, select, input[type="search"] { color: var(--text); }
+    button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px solid rgba(233,185,73,.34); outline-offset: 2px; }
+
+    .app {
+      height: 100%;
+      width: min(1760px, 100%);
+      margin: 0 auto;
+      padding: 14px;
+      display: grid;
+      grid-template-rows: auto auto minmax(0, 1fr);
+      gap: 12px;
+    }
+
+    .topbar {
+      position: relative;
+      overflow: hidden;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 16px;
+      padding: 18px 20px;
+      border: 1px solid var(--stroke);
+      border-radius: var(--radius);
+      background: linear-gradient(135deg, rgba(255,255,255,.1), rgba(255,255,255,.025)), var(--surface);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(18px);
+    }
+
+    .topbar::after {
+      content: "SPQR";
+      position: absolute;
+      right: 18px;
+      bottom: -24px;
+      font-family: Georgia, serif;
+      font-size: 88px;
+      letter-spacing: .1em;
+      color: rgba(233,185,73,.075);
+      pointer-events: none;
+    }
+
+    .title h1 {
+      margin: 0;
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: clamp(28px, 4vw, 54px);
+      line-height: .92;
+      letter-spacing: -.04em;
+    }
+
+    .title h1 span { color: var(--gold); }
+    .title p { margin: 8px 0 0; color: var(--muted); max-width: 940px; line-height: 1.45; }
+
+    .mini-stats {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .stat, .pill {
+      border: 1px solid var(--stroke);
+      border-radius: 999px;
+      background: var(--surface-2);
+      padding: 8px 11px;
+      color: var(--muted);
+      white-space: nowrap;
+      font-size: 13px;
+    }
+    .stat strong, .pill strong { color: var(--gold); }
+
+    .controls {
+      display: grid;
+      grid-template-columns: minmax(380px, 1.15fr) minmax(520px, 1fr);
+      gap: 12px;
+      padding: 12px;
+      border: 1px solid var(--stroke);
+      border-radius: var(--radius);
+      background: var(--surface);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(18px);
+    }
+
+    .transport {
+      display: grid;
+      grid-template-columns: auto auto auto minmax(0, 1fr);
+      gap: 10px;
+      align-items: center;
+      min-width: 0;
+    }
+
+    .btn {
+      border: 1px solid var(--stroke);
+      border-radius: 999px;
+      background: var(--surface-2);
+      color: var(--text);
+      padding: 10px 13px;
+      cursor: pointer;
+      transition: transform .16s ease, border-color .16s ease, background .16s ease;
+      white-space: nowrap;
+    }
+    .btn:hover { transform: translateY(-1px); border-color: rgba(233,185,73,.55); background: rgba(233,185,73,.12); }
+    .btn.primary { background: linear-gradient(135deg, #ffe08b, #d59b30); color: #1f1505; font-weight: 800; border-color: rgba(255,255,255,.3); }
+    .btn.icon { width: 42px; height: 42px; padding: 0; display: grid; place-items: center; font-size: 24px; }
+
+    .slider-wrap { min-width: 0; }
+    .slider-label { display: flex; justify-content: space-between; gap: 10px; color: var(--muted); font-size: 13px; margin: 0 2px 7px; }
+    .slider-label strong { color: var(--gold); font-size: 16px; }
+    input[type="range"] { width: 100%; accent-color: var(--gold); }
+
+    .tools {
+      display: grid;
+      grid-template-columns: minmax(180px, 1.2fr) repeat(4, minmax(132px, .8fr)) auto;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .search, .select {
+      width: 100%;
+      border: 1px solid var(--stroke);
+      border-radius: 999px;
+      background: rgba(0,0,0,.16);
+      padding: 10px 12px;
+    }
+    [data-theme="light"] .search, [data-theme="light"] .select { background: rgba(255,255,255,.62); }
+    .search::placeholder { color: color-mix(in srgb, var(--muted), transparent 25%); }
+
+    .main {
+      min-height: 0;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(320px, 430px);
+      gap: 12px;
+    }
+
+    .map-card, .timeline {
+      min-height: 0;
+      border: 1px solid var(--stroke);
+      border-radius: var(--radius);
+      background: var(--surface);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      backdrop-filter: blur(18px);
+    }
+
+    .map-card { position: relative; }
+    #map { height: 100%; width: 100%; background: #0b1017; }
+
+    .map-hud {
+      position: absolute;
+      left: 14px;
+      right: 14px;
+      bottom: 14px;
+      z-index: 500;
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: end;
+      pointer-events: none;
+    }
+    .map-hud > * { pointer-events: auto; }
+    .route-info {
+      max-width: min(720px, 75%);
+      padding: 11px 13px;
+      border: 1px solid var(--stroke);
+      border-radius: 18px;
+      background: rgba(10, 12, 18, .82);
+      backdrop-filter: blur(14px);
+      color: var(--muted);
+      line-height: 1.35;
+      font-size: 13px;
+    }
+    [data-theme="light"] .route-info { background: rgba(255,250,235,.88); }
+    .route-info b { color: var(--gold); }
+
+    .timeline {
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+    }
+
+    .timeline-head {
+      padding: 14px 14px 10px;
+      border-bottom: 1px solid var(--stroke);
+      background: linear-gradient(180deg, rgba(255,255,255,.08), transparent);
+    }
+    .timeline-head h2 { margin: 0; font-family: Georgia, serif; font-size: 25px; }
+    .timeline-head p { margin: 6px 0 0; color: var(--muted); font-size: 13px; line-height: 1.4; }
+    .timeline-meta { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 10px; }
+
+    .timeline-list {
+      overflow: auto;
+      padding: 10px;
+      scrollbar-width: thin;
+      scrollbar-color: var(--gold) transparent;
+    }
+
+    .event {
+      position: relative;
+      display: grid;
+      grid-template-columns: 76px minmax(0, 1fr);
+      gap: 10px;
+      width: 100%;
+      text-align: left;
+      border: 1px solid transparent;
+      border-radius: 17px;
+      background: transparent;
+      padding: 10px;
+      color: var(--text);
+      cursor: pointer;
+      transition: background .16s ease, border-color .16s ease, transform .16s ease;
+    }
+    .event:hover { background: var(--surface-2); border-color: var(--stroke); transform: translateY(-1px); }
+    .event.active { background: rgba(233,185,73,.13); border-color: rgba(233,185,73,.48); }
+    .event-year { color: var(--gold); font-weight: 900; font-size: 13px; line-height: 1.2; }
+    .event-city { font-weight: 800; margin-bottom: 4px; }
+    .event-desc { color: var(--muted); font-size: 13px; line-height: 1.35; }
+    .event-tag { display: inline-block; margin-top: 7px; color: var(--muted); font-size: 11px; border: 1px solid var(--stroke); padding: 3px 7px; border-radius: 999px; }
+    .empty { padding: 18px; color: var(--muted); line-height: 1.45; }
+
+    .leaflet-popup-content-wrapper, .leaflet-popup-tip {
+      background: rgba(14, 16, 24, .95);
+      color: #fff4dc;
+      border: 1px solid rgba(233,185,73,.25);
+      box-shadow: 0 12px 35px rgba(0,0,0,.34);
+    }
+    [data-theme="light"] .leaflet-popup-content-wrapper, [data-theme="light"] .leaflet-popup-tip { background: rgba(255,250,235,.97); color: #20170d; }
+    .popup h3 { margin: 0 0 5px; color: var(--gold); font-size: 16px; }
+    .popup p { margin: 0; line-height: 1.35; }
+
+    .marker-dot {
+      width: 16px;
+      height: 16px;
+      border-radius: 999px;
+      border: 3px solid #fff7e8;
+      background: var(--gold);
+      box-shadow: 0 0 0 6px rgba(233,185,73,.2), 0 9px 22px rgba(0,0,0,.32);
+    }
+    .marker-dot.current { background: #d84d37; box-shadow: 0 0 0 8px rgba(216,77,55,.2), 0 9px 22px rgba(0,0,0,.32); }
+
+    .cinema .topbar, .cinema .controls { display: none; }
+    .cinema.app { padding: 0; grid-template-rows: minmax(0, 1fr); }
+    .cinema .main { grid-row: 1 / -1; grid-template-columns: 1fr; gap: 0; }
+    .cinema .timeline { display: none; }
+    .cinema .map-card { border-radius: 0; border: 0; }
+
+    @media (max-width: 1180px) {
+      body { overflow: auto; }
+      .app { height: auto; min-height: 100%; }
+      .controls, .main, .topbar { grid-template-columns: 1fr; }
+      .tools { grid-template-columns: 1fr 1fr; }
+      .map-card { height: 62vh; min-height: 460px; }
+      .timeline { max-height: 64vh; }
+      .mini-stats { justify-content: flex-start; }
+    }
+
+    @media (max-width: 680px) {
+      .app { padding: 8px; }
+      .topbar, .controls { border-radius: 18px; }
+      .transport { grid-template-columns: auto auto auto; }
+      .slider-wrap { grid-column: 1 / -1; }
+      .tools { grid-template-columns: 1fr; }
+      .main { grid-template-columns: 1fr; }
+      .map-card { height: 56vh; min-height: 380px; }
+      .map-hud { align-items: stretch; flex-direction: column; }
+      .route-info { max-width: 100%; }
+      .event { grid-template-columns: 68px minmax(0, 1fr); }
+    }
+  </style>
+</head>
+<body>
+  <div class="app" id="app">
+    <header class="topbar">
+      <div class="title">
+        <h1>Juliusz <span>Cezar</span></h1>
+        <p>Interaktywna, zoptymalizowana mapa życia: suwak i kalendarium sterują wydarzeniami, a trasa może pokazywać cały ślad podróży, drogę do danego momentu albo tylko ruch w wybranym roku.</p>
+      </div>
+      <div class="mini-stats" aria-label="Podsumowanie">
+        <span class="stat"><strong id="statEvents">—</strong> wydarzeń</span>
+        <span class="stat"><strong id="statPlaces">—</strong> miejsc</span>
+        <span class="stat"><strong id="statYears">—</strong> lat</span>
+      </div>
+    </header>
+
+    <section class="controls" aria-label="Sterowanie mapą i osią czasu">
+      <div class="transport">
+        <button class="btn icon" id="prevBtn" title="Poprzednie wydarzenie">‹</button>
+        <button class="btn primary" id="playBtn">▶ Odtwarzaj</button>
+        <button class="btn icon" id="nextBtn" title="Następne wydarzenie">›</button>
+        <label class="slider-wrap" for="yearSlider">
+          <span class="slider-label"><span>Oś czasu</span><strong id="currentYear">100 p.n.e.</strong></span>
+          <input id="yearSlider" type="range" min="0" value="0" step="1" />
+        </label>
+      </div>
+
+      <div class="tools">
+        <input class="search" id="searchInput" type="search" placeholder="Szukaj: Rubikon, Galia, Kleopatra…" autocomplete="off" />
+        <select class="select" id="categorySelect" title="Filtr tematyczny"></select>
+        <select class="select" id="routeScope" title="Zakres śladu podróży">
+          <option value="progress">Trasa: do suwaka</option>
+          <option value="all">Trasa: cały ślad</option>
+          <option value="year">Trasa: rok z suwaka</option>
+          <option value="off">Trasa: ukryj</option>
+        </select>
+        <select class="select" id="markerScope" title="Widoczność markerów">
+          <option value="current">Markery: aktualny</option>
+          <option value="progress">Markery: do suwaka</option>
+          <option value="year">Markery: rok z suwaka</option>
+          <option value="filtered">Markery: wg filtrów</option>
+        </select>
+        <select class="select" id="mapStyle" title="Styl mapy">
+          <option value="voyager">Mapa jasna</option>
+          <option value="dark">Mapa nocna</option>
+          <option value="osm">Mapa OSM</option>
+        </select>
+        <button class="btn" id="themeBtn" title="Zmień motyw">◐</button>
+      </div>
+    </section>
+
+    <main class="main">
+      <section class="map-card" aria-label="Mapa podróży Juliusza Cezara">
+        <div id="map"></div>
+        <div class="map-hud">
+          <div class="route-info" id="routeInfo">Ładowanie mapy…</div>
+          <button class="btn primary" id="fitBtn">Dopasuj widok</button>
+        </div>
+      </section>
+
+      <aside class="timeline" aria-label="Kalendarium wydarzeń">
+        <div class="timeline-head">
+          <h2>Kalendarium</h2>
+          <p>To jest jedyny panel szczegółów: kliknij wydarzenie, użyj suwaka albo odtwarzania. Opisy nie są dublowane w osobnym module.</p>
+          <div class="timeline-meta">
+            <span class="pill"><strong id="visibleCount">—</strong> widocznych</span>
+            <span class="pill" id="routeModeLabel">Trasa: —</span>
+          </div>
+        </div>
+        <div class="timeline-list" id="timelineList"></div>
+      </aside>
+    </main>
+  </div>
+
+  <script>
+    const rawEvents = [
+            {year: "100 p.n.e.", location: [41.9028, 12.4964], city: "Rzym", desc: "Urodziny Gajusza Juliusza Cezara"},
+            {year: "97 p.n.e.", location: [41.9028, 12.4964], city: "Rzym", desc: "Dzieciństwo w rodzinie patrycjuszowskiej"},
+            {year: "95 p.n.e.", location: [41.9028, 12.4964], city: "Rzym", desc: "Wczesna edukacja w domu rodzinnym"},
+            {year: "90 p.n.e.", location: [41.9028, 12.4964], city: "Rzym", desc: "Śmierć ojca - Gajusza Juliusza Cezara Starszego"},
+            {year: "86 p.n.e.", location: [41.9028, 12.4964], city: "Rzym", desc: "Ślub z Kornelią, córką Cynny"},
+            {year: "85 p.n.e.", location: [41.9028, 12.4964], city: "Rzym", desc: "Pierwsze wystąpienie publiczne jako młody orator"},
+            {year: "84 p.n.e.", location: [41.9028, 12.4964], city: "Rzym", desc: "Nominacja na Flamen Dialis (kapłana Jowisza)"},
+            {year: "83 p.n.e.", location: [41.9028, 12.4964], city: "Rzym", desc: "Konflikt z Sullą, utrata majątku i kapłaństwa"},
+            {year: "82 p.n.e.", location: [39.9334, 32.8597], city: "Azja Mniejsza", desc: "Ucieczka przed proskrypcjami Sulli, początek służby wojskowej"},
+            {year: "81 p.n.e.", location: [37.8667, 34.6000], city: "Cilicia / Bitynia", desc: "Służba wojskowa, misja dyplomatyczna do króla Nikomedesa IV"},
+            {year: "80 p.n.e.", location: [38.4189, 27.1287], city: "Mitylena (Lesbos)", desc: "Odznaczenie corona civica za odwagę podczas oblężenia Mityleny"},
+            {year: "78 p.n.e.", location: [41.9028, 12.4964], city: "Rzym", desc: "Powrót do Rzymu po śmierci Sulli"},
+            {year: "77 p.n.e.", location: [41.9028, 12.4964], city: "Rzym", desc: "Rozpoczęcie kariery prawniczej, oskarżenie Gnejusza Korneliusza Dolabelli"},
+            {year: "76 p.n.e.", location: [41.9028, 12.4964], city: "Rzym", desc: "Oskarżenie Gajusza Antoniusza Hybrydy"},
+            {year: "75 p.n.e.", location: [37.0000, 27.0000], city: "Morze Egejskie", desc: "Porwanie przez piratów w drodze na Rodos"},
+            {year: "74 p.n.e.", location: [39.9334, 32.8597], city: "Azja Mniejsza", desc: "Po uwolnieniu, organizuje flotę i ściga piratów"},
+            {year: "73 p.n.e.", location: [41.9028, 12.4964], city: "Rzym", desc: "Wybór na pontyfika (członka kolegium kapłańskiego)"},
+            {year: "70 p.n.e.", location: [37.8833, -4.7667], city: "Hiszpania Dalsza", desc: "Kwestura w Hiszpanii Dalszej"},
+            {year: "69 p.n.e.", location: [41.9028, 12.4964], city: "Rzym", desc: "Śmierć ciotki Julii (wdowy po Mariuszu) i żony Kornelii, wygłoszenie mów pogrzebowych"},
+            {year: "68/67 p.n.e.", location: [41.9028, 12.4964], city: "Rzym", desc: "Małżeństwo z Pompeją (wnuczką Sulli)"},
+            {year: "65 p.n.e.", location: [41.9028, 12.4964], city: "Rzym", desc: "Edylat kurulny - organizacja wspaniałych igrzysk"},
+            {year: "63 p.n.e.", location: [41.9028, 12.4964], city: "Rzym", desc: "Wybór na Najwyższego Kapłana (Pontifex Maximus), udział w debacie senackiej ws. spisku Katyliny"},
+            {year: "62 p.n.e.", location: [41.9028, 12.4964], city: "Rzym", desc: "Pretura; skandal z Klodiuszem Pulcherem podczas obrzędów Dobrej Bogini (Bona Dea)"},
+            {year: "61 p.n.e.", location: [41.9028, 12.4964], city: "Rzym", desc: "Rozwód z Pompeją"},
+            {year: "61-60 p.n.e.", location: [37.8833, -4.7667], city: "Hiszpania Dalsza", desc: "Propretura (zarząd prowincją), udane kampanie militarne"},
+            {year: "60 p.n.e.", location: [41.9028, 12.4964], city: "Rzym", desc: "Powrót do Rzymu, rezygnacja z triumfu na rzecz kandydowania na konsula, zawiązanie I Triumwiratu (z Pompejuszem i Krassusem)"},
+            {year: "59 p.n.e.", location: [41.9028, 12.4964], city: "Rzym", desc: "Konsulat; przepchnięcie ustaw (m.in. agrarnej), małżeństwo z Kalpurnią, wydanie córki Julii za Pompejusza"},
+            {year: "58 p.n.e.", location: [46.2044, 6.1432], city: "Genewa", desc: "Początek wojen galijskich - starcie z Helwetami pod Genewą"},
+            {year: "58 p.n.e.", location: [47.0458, 4.7244], city: "Bibracte", desc: "Zwycięstwo nad Helwetami pod Bibracte"},
+            {year: "58 p.n.e.", location: [47.8000, 7.0000], city: "Wogezy", desc: "Zwycięstwo nad Germanami (Ariowistem) w Wogezach"},
+            {year: "57 p.n.e.", location: [50.4000, 3.9667], city: "Sabis", desc: "Bitwa nad rzeką Sabis (Sambre) przeciwko Nerwiom"},
+            {year: "57 p.n.e.", location: [50.7797, 5.4667], city: "Atuatuca", desc: "Podbój Atuatuków"},
+            {year: "56 p.n.e.", location: [47.6572, -2.7600], city: "Zat. Morbihan", desc: "Kampania przeciwko Wenetom (bitwa morska w zatoce Morbihan)"},
+            {year: "56 p.n.e.", location: [43.8447, 10.5050], city: "Luca", desc: "Odnowienie triumwiratu na spotkaniu w Lukce"},
+            {year: "55 p.n.e.", location: [50.7375, 7.0981], city: "Ren", desc: "Budowa mostu na Renie, krótka wyprawa przeciw Germanom"},
+            {year: "55 p.n.e.", location: [51.1283, 1.3117], city: "Britannia", desc: "Pierwsza, rekonesansowa wyprawa do Brytanii"},
+            {year: "54 p.n.e.", location: [51.2750, 1.0872], city: "Britannia", desc: "Druga, większa wyprawa do Brytanii, starcia z Kassywelaunem"},
+            {year: "54 p.n.e.", location: [41.9028, 12.4964], city: "Rzym", desc: "Śmierć córki Julii, żony Pompejusza (osłabienie więzi w triumwiracie)"},
+            {year: "54/53 p.n.e.", location: [50.6000, 5.8000], city: "Płn.-Wsch. Galia", desc: "Powstanie Eburonów pod wodzą Ambioriksa, zniszczenie legionu"},
+            {year: "53 p.n.e.", location: [36.8667, 39.0167], city: "Carrhae", desc: "Śmierć Krassusa w bitwie pod Carrhae (koniec I Triumwiratu)"},
+            {year: "53 p.n.e.", location: [48.8566, 2.3522], city: "Galia", desc: "Pacyfikacja powstań, druga przeprawa przez Ren"},
+            {year: "52 p.n.e.", location: [47.0833, 2.4000], city: "Avaricum", desc: "Zdobycie Avaricum (Bourges)"},
+            {year: "52 p.n.e.", location: [45.7833, 3.0833], city: "Gergowia", desc: "Nieudane oblężenie Gergowii, porażka Cezara"},
+            {year: "52 p.n.e.", location: [47.5333, 4.2833], city: "Alezja", desc: "Oblężenie Alezji, decydujące zwycięstwo nad Wercyngetoryksem i zjednoczonymi Galami"},
+            {year: "51-50 p.n.e.", location: [48.8566, 2.3522], city: "Galia", desc: "Ostateczna pacyfikacja Galii, organizacja prowincji"},
+            {year: "50 p.n.e.", location: [41.9028, 12.4964], city: "Rzym", desc: "Narastający konflikt polityczny z senatem i Pompejuszem"},
+            {year: "49 p.n.e. (10 Sty)", location: [44.1941, 12.2751], city: "Rubikon", desc: "'Alea iacta est' - Przekroczenie Rubikonu, początek wojny domowej"},
+            {year: "49 p.n.e.", location: [41.9028, 12.4964], city: "Rzym / Italia", desc: "Szybki marsz na Rzym, opanowanie Italii"},
+            {year: "49 p.n.e.", location: [41.6167, 0.6333], city: "Ilerda (Hiszpania)", desc: "Kampania w Hiszpanii, pokonanie pompejańskich legatów"},
+            {year: "48 p.n.e.", location: [41.3300, 19.4833], city: "Dyrrachium", desc: "Oblężenie Dyrrachium, taktyczna porażka Cezara"},
+            {year: "48 p.n.e. (9 Sie)", location: [39.5500, 22.4167], city: "Farsalos", desc: "Decydujące zwycięstwo nad Pompejuszem pod Farsalos"},
+            {year: "48 p.n.e.", location: [31.2001, 29.9187], city: "Aleksandria", desc: "Pogoń za Pompejuszem do Egiptu; śmierć Pompejusza; początek wojny aleksandryjskiej; romans z Kleopatrą VII"},
+            {year: "47 p.n.e.", location: [31.2001, 29.9187], city: "Aleksandria", desc: "Zakończenie wojny aleksandryjskiej, osadzenie Kleopatry na tronie"},
+            {year: "47 p.n.e. (2 Sie)", location: [40.3000, 36.5500], city: "Zela (Pont)", desc: "Błyskawiczne zwycięstwo nad Farnakesem II ('Veni, vidi, vici')"},
+            {year: "47 p.n.e.", location: [41.9028, 12.4964], city: "Rzym", desc: "Powrót do Rzymu, uspokojenie buntów żołnierzy"},
+            {year: "46 p.n.e. (6 Kwi)", location: [35.8333, 10.6333], city: "Thapsus (Afryka)", desc: "Zwycięstwo nad resztkami pompejańczyków (Katon, Scypion) pod Thapsus"},
+            {year: "46 p.n.e.", location: [41.9028, 12.4964], city: "Rzym", desc: "Cztery triumfy (Galia, Egipt, Pont, Afryka), mianowany dyktatorem na 10 lat"},
+            {year: "46 p.n.e.", location: [41.9028, 12.4964], city: "Rzym", desc: "Reformy: kalendarzowa (juliański), monetarna, społeczna"},
+            {year: "45 p.n.e. (17 Mar)", location: [37.2500, -5.2500], city: "Munda (Hiszpania)", desc: "Ostatnie zwycięstwo w wojnie domowej nad synami Pompejusza"},
+            {year: "45 p.n.e.", location: [41.9028, 12.4964], city: "Rzym", desc: "Powrót do Rzymu, triumf hiszpański, dalsze reformy"},
+            {year: "44 p.n.e. (Luty)", location: [41.9028, 12.4964], city: "Rzym", desc: "Mianowany dyktatorem wieczystym (dictator perpetuus)"},
+            {year: "44 p.n.e. (15 Mar)", location: [41.8919, 12.4853], city: "Rzym (Teatr Pompejusza)", desc: "Idy Marcowe - zabójstwo Cezara przez grupę senatorów"},
+            {year: "44 p.n.e.", location: [41.8925, 12.4853], city: "Rzym (Forum Romanum)", desc: "Publiczny pogrzeb, odczytanie testamentu (Oktawian głównym spadkobiercą)"},
+            {year: "42 p.n.e.", location: [41.9028, 12.4964], city: "Rzym", desc: "Oficjalna deifikacja Cezara przez Senat (Divus Iulius)"}
+        ];
+
+    const categoryMeta = {
+      all: { label: "Wszystkie tematy", color: "#e9b949" },
+      prywatne: { label: "Życie prywatne", color: "#b88cff" },
+      polityka: { label: "Polityka", color: "#69a8ff" },
+      galia: { label: "Wojny galijskie", color: "#69c98f" },
+      civilis: { label: "Wojna domowa", color: "#ff9c55" },
+      wschod: { label: "Egipt i Wschód", color: "#5ad4d8" },
+      reformy: { label: "Reformy i władza", color: "#e9b949" },
+      dziedzictwo: { label: "Śmierć i dziedzictwo", color: "#d84d37" },
+      militarne: { label: "Inne kampanie", color: "#e8ded0" }
+    };
+
+    const els = {
+      app: document.getElementById("app"),
+      yearSlider: document.getElementById("yearSlider"),
+      currentYear: document.getElementById("currentYear"),
+      prevBtn: document.getElementById("prevBtn"),
+      nextBtn: document.getElementById("nextBtn"),
+      playBtn: document.getElementById("playBtn"),
+      searchInput: document.getElementById("searchInput"),
+      categorySelect: document.getElementById("categorySelect"),
+      routeScope: document.getElementById("routeScope"),
+      markerScope: document.getElementById("markerScope"),
+      mapStyle: document.getElementById("mapStyle"),
+      themeBtn: document.getElementById("themeBtn"),
+      fitBtn: document.getElementById("fitBtn"),
+      timelineList: document.getElementById("timelineList"),
+      routeInfo: document.getElementById("routeInfo"),
+      visibleCount: document.getElementById("visibleCount"),
+      routeModeLabel: document.getElementById("routeModeLabel"),
+      statEvents: document.getElementById("statEvents"),
+      statPlaces: document.getElementById("statPlaces"),
+      statYears: document.getElementById("statYears")
+    };
+
+    const normalize = value => String(value)
+      .toLocaleLowerCase("pl-PL")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+
+    const escapeHTML = value => String(value).replace(/[&<>'"]/g, ch => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      "'": "&#39;",
+      '"': "&quot;"
+    }[ch]));
+
+    function yearsFromLabel(label) {
+      const matches = String(label).match(/\d+/g) || [];
+      return [...new Set(matches.map(Number))];
+    }
+
+    function getCategory(event) {
+      const t = normalize(`${event.year} ${event.city} ${event.desc}`);
+      if (/zaboj|idy|pogrzeb|testament|deifik/.test(t)) return "dziedzictwo";
+      if (/reform|kalendar|monetarn|spoleczn|dyktator/.test(t)) return "reformy";
+      if (/egipt|aleksandri|kleopatr|zela|pont|farnakes|carrhae/.test(t)) return "wschod";
+      if (/rubikon|pompejusz|farsalos|dyrrachium|ilerda|thapsus|munda|wojna domowa|afryka/.test(t)) return "civilis";
+      if (/gali|helwet|ariowist|sabis|nerwi|atuatuk|wenet|morbihan|bibracte|alezj|gergow|avaricum|eburon|ambioriks|brytani|ren|wogez/.test(t)) return "galia";
+      if (/konsulat|triumwirat|senat|pontifex|maximus|pretur|edyl|kaplan|kwestur|pontyfika|luca|ustaw/.test(t)) return "polityka";
+      if (/urodzin|dziecinstw|edukacj|slub|malzen|rozwod|smierc ojca|smierc ciotki|smierc corki|zona|kalpurn|korneli|pompej/.test(t)) return "prywatne";
+      if (/bitwa|zwyciestw|oblezenie|kampani|sluzb|wypraw|podboj|flot|odwaga|wojsk/.test(t)) return "militarne";
+      return "polityka";
+    }
+
+    function haversineKm(a, b) {
+      const R = 6371;
+      const dLat = (b[0] - a[0]) * Math.PI / 180;
+      const dLng = (b[1] - a[1]) * Math.PI / 180;
+      const lat1 = a[0] * Math.PI / 180;
+      const lat2 = b[0] * Math.PI / 180;
+      const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+      return 2 * R * Math.asin(Math.sqrt(h));
+    }
+
+    function simplifyRoute(list) {
+      const out = [];
+      for (const event of list) {
+        const last = out[out.length - 1];
+        if (!last || last.location[0] !== event.location[0] || last.location[1] !== event.location[1]) out.push(event);
+      }
+      return out;
+    }
+
+    function routeDistance(list) {
+      const points = simplifyRoute(list);
+      return points.slice(1).reduce((sum, event, i) => sum + haversineKm(points[i].location, event.location), 0);
+    }
+
+    const events = rawEvents.map((event, id) => {
+      const category = getCategory(event);
+      const yearNums = yearsFromLabel(event.year);
+      return {
+        ...event,
+        id,
+        category,
+        yearNums,
+        primaryYear: yearNums[0] || 0,
+        searchText: normalize(`${event.year} ${event.city} ${event.desc} ${categoryMeta[category].label}`)
+      };
+    });
+
+    let selectedIndex = 0;
+    let searchQuery = "";
+    let activeCategory = "all";
+    let timer = null;
+    let tileLayer = null;
+    let routeLayer = L.layerGroup();
+
+    const selectedYear = () => events[selectedIndex].primaryYear;
+    const sameSelectedYear = event => event.yearNums.includes(selectedYear());
+
+    const filteredEvents = () => events.filter(event => {
+      const categoryOK = activeCategory === "all" || event.category === activeCategory;
+      const searchOK = !searchQuery || event.searchText.includes(searchQuery);
+      return categoryOK && searchOK;
+    });
+
+    function routeEvents() {
+      const scope = els.routeScope.value;
+      if (scope === "off") return [];
+      if (scope === "all") return events;
+      if (scope === "year") return events.filter(sameSelectedYear);
+      return events.slice(0, selectedIndex + 1);
+    }
+
+    function markerEvents() {
+      const scope = els.markerScope.value;
+      if (scope === "filtered") return filteredEvents();
+      if (scope === "year") return events.filter(sameSelectedYear);
+      if (scope === "progress") return events.slice(0, selectedIndex + 1);
+      return [events[selectedIndex]];
+    }
+
+    const map = L.map("map", {
+      center: [41.9028, 12.4964],
+      zoom: 5,
+      zoomControl: false,
+      preferCanvas: true
+    });
+    L.control.zoom({ position: "topright" }).addTo(map);
+    routeLayer.addTo(map);
+
+    const tileLayers = {
+      voyager: L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
+        attribution: "&copy; OpenStreetMap &copy; CARTO",
+        subdomains: "abcd",
+        maxZoom: 20
+      }),
+      dark: L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+        attribution: "&copy; OpenStreetMap &copy; CARTO",
+        subdomains: "abcd",
+        maxZoom: 20
+      }),
+      osm: L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: "&copy; OpenStreetMap contributors",
+        maxZoom: 19
+      })
+    };
+
+    function setTile(name) {
+      if (tileLayer) map.removeLayer(tileLayer);
+      tileLayer = tileLayers[name] || tileLayers.voyager;
+      tileLayer.addTo(map);
+    }
+
+    const iconNormal = L.divIcon({ className: "", html: '<div class="marker-dot"></div>', iconSize: [16, 16], iconAnchor: [8, 8] });
+    const iconCurrent = L.divIcon({ className: "", html: '<div class="marker-dot current"></div>', iconSize: [18, 18], iconAnchor: [9, 9] });
+
+    const markers = events.map(event => {
+      const marker = L.marker(event.location, { icon: iconNormal, keyboard: false });
+      marker.bindPopup(`<div class="popup"><h3>${escapeHTML(event.year)} — ${escapeHTML(event.city)}</h3><p>${escapeHTML(event.desc)}</p></div>`);
+      marker.on("click", () => selectEvent(event.id, { fly: false, openPopup: true }));
+      return marker;
+    });
+
+    function initCategorySelect() {
+      els.categorySelect.innerHTML = Object.entries(categoryMeta).map(([key, meta]) => (
+        `<option value="${key}">${escapeHTML(meta.label)}</option>`
+      )).join("");
+    }
+
+    function selectEvent(index, options = {}) {
+      selectedIndex = Math.max(0, Math.min(events.length - 1, index));
+      els.yearSlider.value = selectedIndex;
+      els.currentYear.textContent = events[selectedIndex].year;
+      render({ fly: options.fly !== false, openPopup: options.openPopup !== false });
+    }
+
+    function renderMarkers() {
+      const visibleIds = new Set(markerEvents().map(event => event.id));
+      markers.forEach((marker, index) => {
+        const visible = visibleIds.has(index);
+        if (visible && !map.hasLayer(marker)) marker.addTo(map);
+        if (!visible && map.hasLayer(marker)) marker.removeFrom(map);
+        if (visible) {
+          marker.setIcon(index === selectedIndex ? iconCurrent : iconNormal);
+          marker.setZIndexOffset(index === selectedIndex ? 1000 : 0);
+        }
+      });
+    }
+
+    function renderRoute() {
+      routeLayer.clearLayers();
+      const list = routeEvents();
+      const route = simplifyRoute(list);
+      const scope = els.routeScope.value;
+      const color = scope === "year" ? "#5ad4d8" : scope === "all" ? "#e9b949" : "#d84d37";
+      if (route.length > 1) {
+        L.polyline(route.map(event => event.location), {
+          color,
+          weight: scope === "all" ? 3 : 4,
+          opacity: scope === "all" ? .72 : .9,
+          dashArray: scope === "all" ? "7 8" : null,
+          lineCap: "round",
+          lineJoin: "round"
+        }).addTo(routeLayer);
+        L.circleMarker(route[0].location, { radius: 6, color, fillColor: color, fillOpacity: .75, weight: 2 }).addTo(routeLayer);
+        L.circleMarker(route[route.length - 1].location, { radius: 8, color: "#fff4dc", fillColor: color, fillOpacity: .95, weight: 2 }).addTo(routeLayer);
+      }
+      updateRouteInfo(list, route);
+    }
+
+    function updateRouteInfo(list, route) {
+      const scope = els.routeScope.value;
+      const labels = {
+        off: "ukryta",
+        progress: "od narodzin do aktualnego wydarzenia",
+        all: "cały ślad podróży",
+        year: `podróże w roku ${selectedYear()} p.n.e.`
+      };
+      const distance = Math.round(routeDistance(list)).toLocaleString("pl-PL");
+      const current = events[selectedIndex];
+      const routeText = scope === "off"
+        ? "Ślad trasy jest wyłączony."
+        : route.length > 1
+          ? `Trasa: <b>${labels[scope]}</b>, ${route.length} punktów, ok. <b>${distance} km</b>.`
+          : `Trasa: <b>${labels[scope]}</b>, ale w tym zakresie nie ma przejazdu między różnymi punktami.`;
+      els.routeInfo.innerHTML = `${routeText}<br>Aktualnie: <b>${escapeHTML(current.year)} — ${escapeHTML(current.city)}</b>: ${escapeHTML(current.desc)}`;
+      els.routeModeLabel.textContent = `Trasa: ${labels[scope]}`;
+    }
+
+    function renderTimeline() {
+      const list = filteredEvents();
+      els.visibleCount.textContent = list.length;
+      if (!list.length) {
+        els.timelineList.innerHTML = '<div class="empty">Brak wydarzeń dla tych filtrów. Wyczyść wyszukiwanie albo wybierz „Wszystkie tematy”.</div>';
+        return;
+      }
+      const fragment = document.createDocumentFragment();
+      for (const event of list) {
+        const button = document.createElement("button");
+        button.className = `event${event.id === selectedIndex ? " active" : ""}`;
+        button.type = "button";
+        button.dataset.id = event.id;
+        button.innerHTML = `
+          <div class="event-year">${escapeHTML(event.year)}</div>
+          <div>
+            <div class="event-city">${escapeHTML(event.city)}</div>
+            <div class="event-desc">${escapeHTML(event.desc)}</div>
+            <span class="event-tag">${escapeHTML(categoryMeta[event.category].label)}</span>
+          </div>`;
+        button.addEventListener("click", () => selectEvent(event.id));
+        fragment.appendChild(button);
+      }
+      els.timelineList.replaceChildren(fragment);
+      const active = els.timelineList.querySelector(".event.active");
+      if (active) active.scrollIntoView({ block: "nearest" });
+    }
+
+    function fitCurrentRoute() {
+      const route = simplifyRoute(routeEvents());
+      const list = route.length ? route : events;
+      const bounds = L.latLngBounds(list.map(event => event.location));
+      if (bounds.isValid()) map.fitBounds(bounds.pad(.2), { animate: true, duration: .75 });
+    }
+
+    function render(options = {}) {
+      renderMarkers();
+      renderRoute();
+      renderTimeline();
+      const current = events[selectedIndex];
+      if (options.fly) map.flyTo(current.location, Math.max(map.getZoom(), 5), { duration: .65 });
+      if (options.openPopup && map.hasLayer(markers[selectedIndex])) markers[selectedIndex].openPopup();
+    }
+
+    function togglePlay() {
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+        els.playBtn.textContent = "▶ Odtwarzaj";
+        return;
+      }
+      els.playBtn.textContent = "Ⅱ Pauza";
+      timer = setInterval(() => {
+        if (selectedIndex >= events.length - 1) {
+          togglePlay();
+          return;
+        }
+        selectEvent(selectedIndex + 1, { openPopup: false });
+      }, 1300);
+    }
+
+    function bindEvents() {
+      els.yearSlider.max = events.length - 1;
+      els.yearSlider.addEventListener("input", event => selectEvent(Number(event.target.value), { openPopup: false }));
+      els.prevBtn.addEventListener("click", () => selectEvent(selectedIndex - 1));
+      els.nextBtn.addEventListener("click", () => selectEvent(selectedIndex + 1));
+      els.playBtn.addEventListener("click", togglePlay);
+      els.searchInput.addEventListener("input", event => {
+        searchQuery = normalize(event.target.value.trim());
+        render({ fly: false, openPopup: false });
+      });
+      els.categorySelect.addEventListener("change", event => {
+        activeCategory = event.target.value;
+        render({ fly: false, openPopup: false });
+      });
+      els.routeScope.addEventListener("change", () => render({ fly: false, openPopup: false }));
+      els.markerScope.addEventListener("change", () => render({ fly: false, openPopup: false }));
+      els.mapStyle.addEventListener("change", event => setTile(event.target.value));
+      els.themeBtn.addEventListener("click", () => {
+        const root = document.documentElement;
+        root.dataset.theme = root.dataset.theme === "dark" ? "light" : "dark";
+      });
+      els.fitBtn.addEventListener("click", fitCurrentRoute);
+      window.addEventListener("keydown", event => {
+        if (event.target.matches("input, select, button")) return;
+        if (event.key === "ArrowLeft") selectEvent(selectedIndex - 1);
+        if (event.key === "ArrowRight") selectEvent(selectedIndex + 1);
+        if (event.key === " ") { event.preventDefault(); togglePlay(); }
+        if (event.key.toLocaleLowerCase() === "f") fitCurrentRoute();
+        if (event.key.toLocaleLowerCase() === "c") {
+          els.app.classList.toggle("cinema");
+          setTimeout(() => map.invalidateSize(), 80);
+        }
+      });
+    }
+
+    function initStats() {
+      els.statEvents.textContent = events.length;
+      els.statPlaces.textContent = new Set(events.map(e => e.city)).size;
+      const years = events.flatMap(e => e.yearNums);
+      const span = Math.max(...years) - Math.min(...years);
+      els.statYears.textContent = span;
+    }
+
+    initCategorySelect();
+    bindEvents();
+    initStats();
+    setTile("voyager");
+    selectEvent(0, { fly: false });
+    setTimeout(fitCurrentRoute, 350);
+  </script>
+</body>
+</html>
