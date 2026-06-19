@@ -8,7 +8,7 @@ See example: https://colab.research.google.com/github/RemigiuszDurka/fizykatomni
 
 See example: https://colab.research.google.com/drive/15PMeEg_V21tQgLgsNld_1Z0_OaPKLCIn?usp=sharing
 
-## The task
+## Task
 
 Use Colab as a laboratory:
 
