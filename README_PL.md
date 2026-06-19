@@ -6,6 +6,10 @@ Link: https://colab.research.google.com/
 
 Jest darmowa usługa tak samo jako gmail.
 
+- https://colab.research.google.com/github/RemigiuszDurka/fizykatomniefascynuje/blob/main/Fizyka_to_mnie_fascynuje-RD.ipynb
+- https://colab.research.google.com/drive/15PMeEg_V21tQgLgsNld_1Z0_OaPKLCIn?usp=sharing
+
+
 ## Zadanie
 
 Colab służy jako laboratorium:
